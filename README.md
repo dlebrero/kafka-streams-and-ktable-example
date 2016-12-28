@@ -5,6 +5,8 @@ This code is the companion of the blog post [Kafka Streams a POC]()
 This project uses Docker to create a cluster of 3 microservices that consume from a Kafka topic using the
 Kafka Streams API.
 
+The main processing function is [here](our-service/src/our_service/kafka_streams.clj#L55).
+
 ## Usage
 
 Docker should be installed.
