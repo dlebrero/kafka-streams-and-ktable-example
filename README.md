@@ -1,6 +1,8 @@
 # Kafka Streams and KTables examples
 
-This code is the companion of the blog post [Kafka Streams a POC]()
+This code is the companion of the blog post [Proof of concept using KafkaStreams and KTables](http://danlebrero.com/2017/01/05/proof-of-concept-using-kafkastreams-and-ktables/). 
+
+There is a longer explanation of the code at [Proof of concept using KafkaStreams and KTables - implementation notes, gotchas and Docker Compose example](http://danlebrero.com/2017/01/06/proof-of-concept-using-kafkastreams-and-ktables-implementation-notes-gotchas-and-docker-compose/)
 
 This project uses Docker to create a cluster of 3 microservices that consume from a Kafka topic using the
 Kafka Streams API.
