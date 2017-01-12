@@ -2,7 +2,7 @@
   (:require [clojure.tools.logging :as log]
             [franzy.admin.topics :as topics]
             [franzy.admin.zookeeper.client :as client])
-  (:import (org.apache.kafka.streams.kstream Reducer KeyValueMapper Predicate)
+  (:import (org.apache.kafka.streams.kstream Reducer KeyValueMapper Predicate ValueJoiner)
            (java.net Socket)))
 
 (defmacro reducer [kv & body]
@@ -20,6 +20,11 @@
      (test [_# ~(first kv) ~(second kv)]
        ~@body)))
 
+
+(defmacro val-joiner [kv & body]
+  `(reify ValueJoiner
+     (apply [_# ~(first kv) ~(second kv)]
+       ~@body)))
 
 (defn for-ever
   [msg thunk]

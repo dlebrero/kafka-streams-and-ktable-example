@@ -31,7 +31,13 @@
   (for-ever
     #(producer/send-sync! @kafka-client m)))
 
-(defn update-share-holder [client ticker exchange amount]
+(defn set-ref-data [ticker name exchange]
+  (produce-edn {:topic "shares-ref-data"
+                :key   ticker
+                :value {:name  name
+                        :exchange exchange}}))
+
+(defn update-share-holder [client ticker amount]
   (let [kafka-key (str client ":::" ticker)]
     (if (zero? amount)
       (produce-edn {:topic "share-holders"
@@ -42,13 +48,16 @@
                     :value {:client   client
                             :id       kafka-key
                             :ticker   ticker
-                            :exchange exchange
                             :amount   amount}}))))
 
 (defn api [us-share-holders]
   (routes
-    (POST "/set-shares" [client ticker exchange amount]
-      (update-share-holder client ticker exchange (Integer/parseInt amount))
+    (POST "/set-shares" [client ticker amount]
+      (update-share-holder client ticker (Integer/parseInt amount))
+      {:status 200
+       :body   (pr-str "done!")})
+    (POST "/set-ref-data" [ticker name exchange]
+      (set-ref-data ticker name exchange)
       {:status 200
        :body   (pr-str "done!")})
     (GET "/local-state" []
@@ -57,8 +66,16 @@
 
 (comment
 
-  (update-share-holder "daniel" "AAPL" "NASDAQ" 99)
-  (update-share-holder "daniel" "BT.A" "LON" 1)
-  (update-share-holder "daniel" "AAPL" "NASDAQ" 0)
+  (do
+    (set-ref-data "AAPL" "Apple Inc." "NASDAQ")
+    (set-ref-data "FB" "Facebook Inc." "NASDAQ")
+    (set-ref-data "AMZN" "Amazon Inc." "NASDAQ")
+    (set-ref-data "VOD" "Vodafone Group PLC" "LON")
+    (set-ref-data "BT.A" "BT Group" "LON"))
+
+  (update-share-holder "daniel" "AAPL" 99)
+  (update-share-holder "daniel" "FB"  99)
+  (update-share-holder "daniel" "BT.A"  1)
+  (update-share-holder "daniel" "AAPL"  0)
 
   )

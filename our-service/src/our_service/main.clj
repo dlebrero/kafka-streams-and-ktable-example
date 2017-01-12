@@ -16,7 +16,7 @@
   (log/info "Waiting for kafka to be ready")
   (k/wait-for-kafka "kafka1" 9092)
   (log/info "Waiting for topics to be created")
-  (k/wait-for-topic "share-holders")
+  (k/wait-for-topic "share-holders-with-ref-data")
   (Thread/sleep 5000)
   (log/info "Starting Kafka Streams")
   (let [[kstream us-share-holders] (kafka-streams/start-kafka-streams)

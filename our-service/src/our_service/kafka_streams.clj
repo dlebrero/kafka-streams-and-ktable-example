@@ -10,11 +10,8 @@
            (org.apache.kafka.streams StreamsConfig KafkaStreams KeyValue)
            (org.apache.kafka.common.serialization Serde Serdes)
            (org.apache.kafka.clients.consumer ConsumerConfig)
-           (org.apache.kafka.streams.kstream KStreamBuilder)
+           (org.apache.kafka.streams.kstream KStreamBuilder KStream)
            (org.apache.kafka.streams.state QueryableStoreTypes)))
-
-
-
 
 ;;;
 ;;; Serialization stuff
@@ -53,10 +50,35 @@
 ;;; Create topology, but do not start it
 ;;;
 (defn create-kafka-stream-topology []
-  (let [builder (KStreamBuilder.)
+  (let [^KStreamBuilder builder (KStreamBuilder.)
+        ref-data (.table builder "shares-ref-data" "shares-ref-data-store")
+        ^KStream x (.stream builder (into-array ["share-holders"]))
+        [nils no-nils]
+        (.branch x (into-array org.apache.kafka.streams.kstream.Predicate
+                               [(k/pred [key value]
+                                  (log/info "First test" key value)
+                                  (nil? value))
+                                (k/pred [key value]
+                                  (log/info "Second test" key value)
+                                  true)]))
+        _
+        (.to nils "share-holders-with-ref-data")
+        _
+        (-> no-nils
+            (.selectKey (k/kv-mapper [key value]
+                          (log/info "SelectKey" key value)
+                          (:ticker value)))
+            (.leftJoin ref-data (k/val-joiner [holder ref-info]
+                                              (log/info "joining" holder "with" ref-info)
+                                              (assoc holder :exchange (:exchange ref-info))))
+            (.selectKey (k/kv-mapper [key value]
+                          (log/info "Re SelectKey" key value)
+                          (:id value)))
+            (.to "share-holders-with-ref-data"))
+
         us-share-holders
         (->
-          (.table builder "share-holders" "share-holder-store")
+          (.table builder "share-holders-with-ref-data" "share-holders-store")
           (.filter (k/pred [key position]
                      (log/info "Filtering" key position)
                      (= "NASDAQ" (:exchange position))))
