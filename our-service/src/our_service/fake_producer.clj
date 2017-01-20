@@ -73,7 +73,7 @@
     (set-ref-data "BT.A" "BT Group" "LON"))
 
   (update-share-holder "xxx" "daniel" "AAPL" 97)
-  (update-share-holder "xxx" "daniel" "FB" 97)
+  (update-share-holder "xxx" "daniel" "VOD" 0)
   (update-share-holder "daniel" "FB"  0)
   (update-share-holder "daniel" "FB"  1)
   (update-share-holder "daniel" "BT.A"  1)

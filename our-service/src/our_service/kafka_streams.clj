@@ -117,6 +117,7 @@
 
 (comment
 
+  (do
   (def ^KStreamBuilder builder (KStreamBuilder.))
 
   (.addSource builder "the-original-source" (into-array ["share-holders"]))
@@ -152,15 +153,14 @@
                                  old (.oldValue change)
                                  new-key (:ticker new)
                                  old-key (:ticker old)]
-                             (doseq [msg (condp = [new old]
+                             (let [msg (condp = [new old]
                                            [nil nil] nil
-                                           [new nil] [{:key new-key :val {:add new}}]
-                                           [nil old] [{:key old-key :val {:delete-and-forward-delete old}}] ;; we do not need the whole old value, just enough to build the key
-                                           [new old] (if (= new-key old-key) ;; comparing partitions would be more efficient
-                                                       [{:key new-key :val {:add new}}]
-                                                       [{:key old-key :val {:delete-but-do-not-forward old}} ;; order is important
-                                                        {:key new-key :val {:add new}}]))]
-                               (.forward ^ProcessorContext @ctx (:key msg) (:val msg)))))
+                                           [new nil] {:key new-key :val new}
+                                           [nil old] {:key old-key :val nil}
+                                           [new old] {:key new-key :val new})]
+                               (println "here -----------------------------------" msg)
+                               (.forward ^ProcessorContext @ctx (:key msg) {:previous-key key
+                                                                            :val          (:val msg)}))))
                          (punctuate [this timestamp])
                          (close [this])))))
                  (into-array ["forward old and new"]))
@@ -168,7 +168,8 @@
   (.addSink builder "sink"
             (str "share-holders" KStreamImpl/REPARTITION_TOPIC_SUFFIX)
             (into-array [to-stream-b]))
-  (.addInternalTopic builder (str "share-holders" KStreamImpl/REPARTITION_TOPIC_SUFFIX))
+  (.addInternalTopic builder
+                     (str "share-holders" KStreamImpl/REPARTITION_TOPIC_SUFFIX))
 
 
   ;;;; reading
@@ -177,59 +178,50 @@
   (def repartition-source-store (str repartition-source "-store"))
   (.addSource builder repartition-source (into-array [repartition-source]))
 
+  (def lookup-table (.table builder "shares-ref-data" "shares-ref-data-store"))
+
   (.addProcessor builder
-                 "process new and old"
+                 "joiner"
                  (reify ProcessorSupplier
                    (get [this]
                      (let [ctx (volatile! nil)
-                           store (volatile! nil)]
+                           ref-data-store (volatile! nil)]
                        (reify Processor
                          (init [this context]
                            (vreset! ctx context)
-                           (vreset! store (.getStateStore context repartition-source-store)))
-                         ;; tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
-
-                         (process [this key command]
-                           (let [v (second (first command))
-                                 cmd (ffirst command)
-                                 mixed-key (str key "|" (:id v))]
-                             (condp = cmd
-                               :add (do
-                                      (.put @store mixed-key joined)
-                                      (.forward ^ProcessorContext @ctx (:id v) joined) ;; cache?
-                                      )
-                               :delete-and-forward-delete
-                               (do
-                                 (.put @store mixed-key nil)
-                                 (.forward ^ProcessorContext @ctx (:id v) nil)) ;; cache?
-                               :delete-but-do-not-forward
-                               (do
-                                 (.put @store mixed-key nil)
-                                 ;(.forward ^ProcessorContext @ctx (:id v) nil)
-                                 )                          ;; cache??
-                               )))
+                           (vreset! ref-data-store (.getStateStore context "shares-ref-data-store")))
+                         (process [this key {:keys [previous-key val] :as v}]
+                           (println "joining!" key v)
+                           (if-not val
+                             (.forward @ctx previous-key nil)
+                             (if-not key
+                               (.forward @ctx previous-key val)
+                               (let [ref-data (.get @ref-data-store key)] ;; handle nil key
+                                 (.forward @ctx previous-key (assoc val :exchange (:exchange ref-data)))))))
                          (punctuate [this timestamp])
                          (close [this])))))
                  (into-array [repartition-source]))
 
-  (def ss (RocksDBKeyValueStoreSupplier. "the-original-source-store"
-                                         nil nil
-                                         false {}
-                                         true))
+  (.addSink builder "sink-join"
+            "share-holders-with-ref-data"
+            ;(str "share-holders" KStreamImpl/LEFTJOIN_NAME)
+            (into-array ["joiner"]))
+  ;; TODO
+  (.addInternalTopic builder (str "share-holders" KStreamImpl/LEFTJOIN_NAME))
 
-  (.addStateStore builder ss (into-array ["forward old and new"]))
+  (.connectProcessorAndStateStores builder "joiner" (into-array ["shares-ref-data-store"]))
 
+  (def poo-table (.table builder
+                         "share-holders-with-ref-data"
+                         ;(str "share-holders" KStreamImpl/LEFTJOIN_NAME)
+                         "share-holders-with-ref-data"))
 
-  (def poo-stream (.stream builder
-                           (into-array [(str "share-holders" KStreamImpl/REPARTITION_TOPIC_SUFFIX)])))
-
-  (.print poo-stream)
+  (.print poo-table)
 
   (def ks (KafkaStreams. builder (kafka-config)))
 
   (.start ks)
-
+  )
   (.close ks)
 
   )
-)

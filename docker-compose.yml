@@ -10,7 +10,7 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ADVERTISED_PORT: 9092
       KAFKA_ZOOKEEPER_CONNECT: zoo1:2181
-      KAFKA_CREATE_TOPICS: "share-holders:4:1:compact,shares-ref-data:8:1:compact,share-holders-with-ref-data:4:1:compact"
+      KAFKA_CREATE_TOPICS: "share-holders:4:1:compact,shares-ref-data:4:1:compact,share-holders-with-ref-data:4:1:compact"
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
  our-service1:
    image: danlebrero/ktable-demo
