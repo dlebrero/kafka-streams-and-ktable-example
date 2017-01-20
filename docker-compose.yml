@@ -19,15 +19,15 @@ services:
     - 3004:80
    volumes:
     - ./our-service/src/:/app/src/
- our-service2:
-   image: danlebrero/ktable-demo
-   ports:
-    - 3005:3002
-   volumes:
-    - ./our-service/src/:/app/src/
- our-service3:
-   image: danlebrero/ktable-demo
-   ports:
-    - 3007:3002
-   volumes:
-    - ./our-service/src/:/app/src/
+# our-service2:
+#   image: danlebrero/ktable-demo
+#   ports:
+#    - 3005:3002
+#   volumes:
+#    - ./our-service/src/:/app/src/
+# our-service3:
+#   image: danlebrero/ktable-demo
+#   ports:
+#    - 3007:3002
+#   volumes:
+#    - ./our-service/src/:/app/src/

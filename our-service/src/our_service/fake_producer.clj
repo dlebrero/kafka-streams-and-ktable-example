@@ -37,18 +37,17 @@
                 :value {:name  name
                         :exchange exchange}}))
 
-(defn update-share-holder [client ticker amount]
-  (let [kafka-key (str client ":::" ticker)]
-    (if (zero? amount)
-      (produce-edn {:topic "share-holders"
-                    :key   kafka-key
-                    :value nil})
-      (produce-edn {:topic "share-holders"
-                    :key   kafka-key
-                    :value {:client   client
-                            :id       kafka-key
-                            :ticker   ticker
-                            :amount   amount}}))))
+(defn update-share-holder [kafka-key client ticker amount]
+  (if (zero? amount)
+    (produce-edn {:topic "share-holders"
+                  :key   kafka-key
+                  :value nil})
+    (produce-edn {:topic "share-holders"
+                  :key   kafka-key
+                  :value {:client client
+                          :id     kafka-key
+                          :ticker ticker
+                          :amount amount}})))
 
 (defn api [us-share-holders]
   (routes
@@ -73,8 +72,10 @@
     (set-ref-data "VOD" "Vodafone Group PLC" "LON")
     (set-ref-data "BT.A" "BT Group" "LON"))
 
-  (update-share-holder "daniel" "AAPL" 99)
-  (update-share-holder "daniel" "FB"  99)
+  (update-share-holder "xxx" "daniel" "AAPL" 97)
+  (update-share-holder "xxx" "daniel" "FB" 97)
+  (update-share-holder "daniel" "FB"  0)
+  (update-share-holder "daniel" "FB"  1)
   (update-share-holder "daniel" "BT.A"  1)
   (update-share-holder "daniel" "AAPL"  0)
 

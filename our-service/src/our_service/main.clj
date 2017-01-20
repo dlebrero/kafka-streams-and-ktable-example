@@ -19,13 +19,14 @@
   (k/wait-for-topic "share-holders-with-ref-data")
   (Thread/sleep 5000)
   (log/info "Starting Kafka Streams")
-  (let [[kstream us-share-holders] (kafka-streams/start-kafka-streams)
-        web (fake-producer/api us-share-holders)]
-    (reset! state {:us-shares us-share-holders
-                   :kstream   kstream
+  (let [
+        ;[kstream us-share-holders] (kafka-streams/start-kafka-streams)
+        web (fake-producer/api nil)]
+    (reset! state {:us-shares nil
+                   :kstream   nil
                    :web       web
                    :jetty     (jetty/run-jetty
-                                (wrap-params (fake-producer/api us-share-holders))
+                                (wrap-params (fake-producer/api nil))
                                 {:port  80
                                  :join? false})})))
 
