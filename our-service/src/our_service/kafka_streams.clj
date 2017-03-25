@@ -40,7 +40,7 @@
 (defn kafka-config []
   (doto
     (Properties.)
-    (.put StreamsConfig/APPLICATION_ID_CONFIG (str "example-consumer" (System/currentTimeMillis)))
+    (.put StreamsConfig/APPLICATION_ID_CONFIG "example-consumer")
     (.put StreamsConfig/BOOTSTRAP_SERVERS_CONFIG "kafka1:9092")
     (.put StreamsConfig/ZOOKEEPER_CONNECT_CONFIG "zoo1:2181")
     (.put StreamsConfig/CACHE_MAX_BYTES_BUFFERING_CONFIG 0)
@@ -49,35 +49,98 @@
     (.put StreamsConfig/VALUE_SERDE_CLASS_CONFIG EdnSerde)
     (.put ConsumerConfig/AUTO_OFFSET_RESET_CONFIG "earliest")))
 
+(defn forward-to-old-key-if-nil-processor []
+  (reify ProcessorSupplier
+    (get [_]
+      (let [ctx (volatile! nil)]
+        (reify Processor
+          (init [_ context]
+            (vreset! ctx context))
+          (process [_ key change]
+            (let [new-value (.newValue change)
+                  old-value (.oldValue change)
+                  new-key (:ticker new-value)
+                  old-key (:ticker old-value)]
+              ;; Not very efficient
+              (let [msg (condp = [new-value old-value]
+                          [nil nil] nil
+                          [new-value nil] {:key new-key :val new-value}
+                          [nil old-value] {:key old-key :val nil}
+                          [new-value old-value] {:key new-key :val new-value})]
+                ;; Note that we wrap the data to forward
+                (.forward ^ProcessorContext @ctx (:key msg)
+                          {:previous-key key
+                           :val          (:val msg)})))
+            (.commit @ctx))
+          (punctuate [_ timestamp])
+          (close [_]))))))
+
+(defn store-original-share-holder-and-forward [^KStreamBuilder builder]
+  ;; Mostly copied from org.apache.kafka.streams.kstream.KStreamBuilder#table
+  (.addSource builder "the-original-source" (into-array ["share-holders"]))
+  (let [ktable-source (doto
+                        (KTableSource. "the-original-source-store")
+                        (.enableSendingOldValues))
+        original-store (RocksDBKeyValueStoreSupplier. "the-original-source-store" nil nil false {} true)
+        forward-to-old-key (.newName builder "KTABLE-TOSTREAM-")
+        forward-old-and-new-processor "forward old and new"
+        repartition-sink (str "share-holders" KStreamImpl/REPARTITION_TOPIC_SUFFIX)]
+    (.addProcessor builder
+                   forward-old-and-new-processor
+                   ktable-source
+                   (into-array ["the-original-source"]))
+    (.addStateStore builder original-store (into-array [forward-old-and-new-processor]))
+    (.addProcessor builder
+                   forward-to-old-key
+                   (forward-to-old-key-if-nil-processor)
+                   (into-array [forward-old-and-new-processor]))
+    (.addSink builder "sink" repartition-sink (into-array [forward-to-old-key]))
+    (.addInternalTopic builder repartition-sink)
+    repartition-sink))
+
+(defn joiner [ref-data-store-name]
+  (reify ProcessorSupplier
+    (get [_]
+      (let [ctx (volatile! nil)
+            ref-data-store (volatile! nil)]
+        (reify Processor
+          (init [_ context]
+            (vreset! ctx context)
+            (vreset! ref-data-store (.getStateStore context ref-data-store-name)))
+          (process [_ key {:keys [previous-key val] :as v}]
+            (log/info "joining" key v)
+            (if-not val
+              ;; No need to join deletes
+              (.forward @ctx previous-key nil)
+              (if-not key
+                ;; "should not happen"
+                (.forward @ctx previous-key val)
+                ;; Do join
+                (let [ref-data (.get @ref-data-store key)]
+                  (.forward @ctx previous-key (assoc val :exchange (:exchange ref-data))))))
+            (.commit @ctx))
+          (punctuate [_ timestamp])
+          (close [_]))))))
+
+(defn join [^KStreamBuilder builder input-topic ref-data-store-name output-topic]
+
+  (let [repartition-source (str input-topic "-source")]
+    (.addSource builder repartition-source (into-array [input-topic]))
+    (.addProcessor builder
+                   "joiner"
+                   (joiner ref-data-store-name)
+                   (into-array [repartition-source]))
+    (.addSink builder "sink-join" output-topic (into-array ["joiner"]))
+    (.connectProcessorAndStateStores builder "joiner" (into-array [ref-data-store-name]))))
+
 ;;;
 ;;; Create topology, but do not start it
 ;;;
 (defn create-kafka-stream-topology []
   (let [^KStreamBuilder builder (KStreamBuilder.)
         ref-data (.table builder "shares-ref-data" "shares-ref-data-store")
-        ^KStream x (.stream builder (into-array ["share-holders"]))
-        [nils no-nils]
-        (.branch x (into-array org.apache.kafka.streams.kstream.Predicate
-                               [(k/pred [key value]
-                                  (log/info "First test" key value)
-                                  (nil? value))
-                                (k/pred [key value]
-                                  (log/info "Second test" key value)
-                                  true)]))
-        _
-        (.to nils "share-holders-with-ref-data")
-        _
-        (-> no-nils
-            (.selectKey (k/kv-mapper [key value]
-                          (log/info "SelectKey" key value)
-                          (:ticker value)))
-            (.leftJoin ref-data (k/val-joiner [holder ref-info]
-                                              (log/info "joining" holder "with" ref-info)
-                                              (assoc holder :exchange (:exchange ref-info))))
-            (.selectKey (k/kv-mapper [key value]
-                          (log/info "Re SelectKey" key value)
-                          (:id value)))
-            (.to "share-holders-with-ref-data"))
+        repartition-topic (store-original-share-holder-and-forward builder)
+        _ (join builder repartition-topic "shares-ref-data-store" "share-holders-with-ref-data")
 
         us-share-holders
         (->
@@ -114,114 +177,3 @@
     (.print us-share-holders)
     (.start kafka-streams)
     [kafka-streams (get-all-in-local-store kafka-streams)]))
-
-(comment
-
-  (do
-  (def ^KStreamBuilder builder (KStreamBuilder.))
-
-  (.addSource builder "the-original-source" (into-array ["share-holders"]))
-
-  (def ktable-source (KTableSource. "the-original-source-store"))
-
-  (.enableSendingOldValues ktable-source)
-
-  (.addProcessor builder
-                 "forward old and new"
-                 ktable-source
-                 (into-array ["the-original-source"]))
-
-  (def ss (RocksDBKeyValueStoreSupplier. "the-original-source-store"
-                                         nil nil
-                                         false {}
-                                         true))
-
-  (.addStateStore builder ss (into-array ["forward old and new"]))
-
-  (def to-stream-b (.newName builder "KTABLE-TOSTREAM-"))
-
-  (.addProcessor builder
-                 to-stream-b
-                 (reify ProcessorSupplier
-                   (get [this]
-                     (let [ctx (volatile! nil)]
-                       (reify Processor
-                         (init [this context]
-                           (vreset! ctx context))
-                         (process [this key change]
-                           (let [new (.newValue change)
-                                 old (.oldValue change)
-                                 new-key (:ticker new)
-                                 old-key (:ticker old)]
-                             (let [msg (condp = [new old]
-                                           [nil nil] nil
-                                           [new nil] {:key new-key :val new}
-                                           [nil old] {:key old-key :val nil}
-                                           [new old] {:key new-key :val new})]
-                               (println "here -----------------------------------" msg)
-                               (.forward ^ProcessorContext @ctx (:key msg) {:previous-key key
-                                                                            :val          (:val msg)}))))
-                         (punctuate [this timestamp])
-                         (close [this])))))
-                 (into-array ["forward old and new"]))
-
-  (.addSink builder "sink"
-            (str "share-holders" KStreamImpl/REPARTITION_TOPIC_SUFFIX)
-            (into-array [to-stream-b]))
-  (.addInternalTopic builder
-                     (str "share-holders" KStreamImpl/REPARTITION_TOPIC_SUFFIX))
-
-
-  ;;;; reading
-
-  (def repartition-source (str "share-holders" KStreamImpl/REPARTITION_TOPIC_SUFFIX))
-  (def repartition-source-store (str repartition-source "-store"))
-  (.addSource builder repartition-source (into-array [repartition-source]))
-
-  (def lookup-table (.table builder "shares-ref-data" "shares-ref-data-store"))
-
-  (.addProcessor builder
-                 "joiner"
-                 (reify ProcessorSupplier
-                   (get [this]
-                     (let [ctx (volatile! nil)
-                           ref-data-store (volatile! nil)]
-                       (reify Processor
-                         (init [this context]
-                           (vreset! ctx context)
-                           (vreset! ref-data-store (.getStateStore context "shares-ref-data-store")))
-                         (process [this key {:keys [previous-key val] :as v}]
-                           (println "joining!" key v)
-                           (if-not val
-                             (.forward @ctx previous-key nil)
-                             (if-not key
-                               (.forward @ctx previous-key val)
-                               (let [ref-data (.get @ref-data-store key)] ;; handle nil key
-                                 (.forward @ctx previous-key (assoc val :exchange (:exchange ref-data)))))))
-                         (punctuate [this timestamp])
-                         (close [this])))))
-                 (into-array [repartition-source]))
-
-  (.addSink builder "sink-join"
-            "share-holders-with-ref-data"
-            ;(str "share-holders" KStreamImpl/LEFTJOIN_NAME)
-            (into-array ["joiner"]))
-  ;; TODO
-  (.addInternalTopic builder (str "share-holders" KStreamImpl/LEFTJOIN_NAME))
-
-  (.connectProcessorAndStateStores builder "joiner" (into-array ["shares-ref-data-store"]))
-
-  (def poo-table (.table builder
-                         "share-holders-with-ref-data"
-                         ;(str "share-holders" KStreamImpl/LEFTJOIN_NAME)
-                         "share-holders-with-ref-data"))
-
-  (.print poo-table)
-
-  (def ks (KafkaStreams. builder (kafka-config)))
-
-  (.start ks)
-  )
-  (.close ks)
-
-  )

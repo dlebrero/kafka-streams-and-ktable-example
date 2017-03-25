@@ -34,25 +34,25 @@
 (defn set-ref-data [ticker name exchange]
   (produce-edn {:topic "shares-ref-data"
                 :key   ticker
-                :value {:name  name
+                :value {:name     name
                         :exchange exchange}}))
 
-(defn update-share-holder [kafka-key client ticker amount]
+(defn update-share-holder [position-id client ticker amount]
   (if (zero? amount)
     (produce-edn {:topic "share-holders"
-                  :key   kafka-key
+                  :key   position-id
                   :value nil})
     (produce-edn {:topic "share-holders"
-                  :key   kafka-key
+                  :key   position-id
                   :value {:client client
-                          :id     kafka-key
+                          :id     position-id
                           :ticker ticker
                           :amount amount}})))
 
 (defn api [us-share-holders]
   (routes
-    (POST "/set-shares" [client ticker amount]
-      (update-share-holder client ticker (Integer/parseInt amount))
+    (POST "/set-shares" [position client ticker amount]
+      (update-share-holder position client ticker (Integer/parseInt amount))
       {:status 200
        :body   (pr-str "done!")})
     (POST "/set-ref-data" [ticker name exchange]
@@ -72,11 +72,13 @@
     (set-ref-data "VOD" "Vodafone Group PLC" "LON")
     (set-ref-data "BT.A" "BT Group" "LON"))
 
-  (update-share-holder "xxx" "daniel" "AAPL" 97)
-  (update-share-holder "xxx" "daniel" "VOD" 0)
-  (update-share-holder "daniel" "FB"  0)
-  (update-share-holder "daniel" "FB"  1)
-  (update-share-holder "daniel" "BT.A"  1)
-  (update-share-holder "daniel" "AAPL"  0)
+  (update-share-holder "position1" "daniel" "VOD" 2)
+  (update-share-holder "position2" "daniel" "AAPL" 2)
+  (update-share-holder "position3" "daniel" "FB" 20)
+  (update-share-holder "position4" "daniel" "FB" 10)
+
+  (update-share-holder "position3" "daniel" "FB" 0)
+  (update-share-holder "position4" "daniel" "VOD" 20)
+
 
   )

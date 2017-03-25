@@ -18,13 +18,21 @@ To run:
      cd ..
      docker-compose -p ktable-demo -f docker-compose.yml up
      
-Once the environment has been started, you can add new positions with:
+Once the environment has been started, you have to add some reference data first:
 
-     curl --data "client=client1&exchange=NASDAQ&amount=1&ticker=AAPL" -X POST http://localhost:3004/set-shares
+     curl --data "ticker=AAPL&exchange=NASDAQ&name=Apple" -X POST http://localhost:3004/set-ref-data
+
+And then you can add new positions with:
+
+     curl --data "position=position1&client=client1&amount=1&ticker=AAPL" -X POST http://localhost:3004/set-shares
+
+You can now see what is the local state of a container:
+
+     curl http://localhost:3004/local-state  
 
 To remove a position, just set the amount to 0:
 
-     curl --data "client=client1&exchange=NASDAQ&amount=0&ticker=AAPL" -X POST http://localhost:3004/set-shares
+     curl --data "position=position1&amount=0" -X POST http://localhost:3004/set-shares
      
 ## Clean up
 
