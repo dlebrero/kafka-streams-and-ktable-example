@@ -8,20 +8,27 @@
   (:gen-class)
   (:import (java.util Properties)
            (org.apache.kafka.streams StreamsConfig KafkaStreams KeyValue)
-           (org.apache.kafka.common.serialization Serde Serdes)
+           (org.apache.kafka.common.serialization Serde Serdes Serializer)
            (org.apache.kafka.clients.consumer ConsumerConfig)
-           (org.apache.kafka.streams.kstream KStreamBuilder KStream KTable ForeachAction)
+           (org.apache.kafka.streams.kstream KStreamBuilder)
            (org.apache.kafka.streams.state QueryableStoreTypes)
-           (org.apache.kafka.streams.processor Processor ProcessorSupplier ProcessorContext)
-           (org.apache.kafka.streams.kstream.internals KTableSource KStreamImpl ChangedSerializer ChangedDeserializer Change)
+           (org.apache.kafka.streams.processor ProcessorSupplier Processor ProcessorContext)
+           (org.apache.kafka.streams.kstream.internals KTableSource KStreamImpl)
            (org.apache.kafka.streams.state.internals RocksDBKeyValueStoreSupplier)))
 
 ;;;
 ;;; Serialization stuff
 ;;;
 
+(deftype NotSerializeNil [edn-serializer]
+  Serializer
+  (configure [_ configs isKey] (.configure edn-serializer configs isKey))
+  (serialize [_ topic data]
+    (when data (.serialize edn-serializer topic data)))
+  (close [_] (.close edn-serializer)))
+
 ;; Can be global as they are thread-safe
-(def serializer (serializers/edn-serializer))
+(def serializer (NotSerializeNil. (serializers/edn-serializer)))
 (def deserializer (deserializers/edn-deserializer))
 
 (deftype EdnSerde []
@@ -122,7 +129,7 @@
           (punctuate [_ timestamp])
           (close [_]))))))
 
-(defn join [^KStreamBuilder builder input-topic ref-data-store-name output-topic]
+(defn join-ref-data [^KStreamBuilder builder input-topic ref-data-store-name output-topic]
 
   (let [repartition-source (str input-topic "-source")]
     (.addSource builder repartition-source (into-array [input-topic]))
@@ -140,7 +147,7 @@
   (let [^KStreamBuilder builder (KStreamBuilder.)
         ref-data (.table builder "shares-ref-data" "shares-ref-data-store")
         repartition-topic (store-original-share-holder-and-forward builder)
-        _ (join builder repartition-topic "shares-ref-data-store" "share-holders-with-ref-data")
+        _ (join-ref-data builder repartition-topic "shares-ref-data-store" "share-holders-with-ref-data")
 
         us-share-holders
         (->
