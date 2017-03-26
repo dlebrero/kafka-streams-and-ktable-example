@@ -10,7 +10,7 @@
            (org.apache.kafka.streams StreamsConfig KafkaStreams KeyValue)
            (org.apache.kafka.common.serialization Serde Serdes Serializer)
            (org.apache.kafka.clients.consumer ConsumerConfig)
-           (org.apache.kafka.streams.kstream KStreamBuilder)
+           (org.apache.kafka.streams.kstream KStreamBuilder KTable)
            (org.apache.kafka.streams.state QueryableStoreTypes)
            (org.apache.kafka.streams.processor ProcessorSupplier Processor ProcessorContext)
            (org.apache.kafka.streams.kstream.internals KTableSource KStreamImpl)
@@ -146,10 +146,11 @@
 (defn create-kafka-stream-topology []
   (let [^KStreamBuilder builder (KStreamBuilder.)
         ref-data (.table builder "shares-ref-data" "shares-ref-data-store")
+        client-data (.table builder "client-data" "client-data-store")
         repartition-topic (store-original-share-holder-and-forward builder)
         _ (join-ref-data builder repartition-topic "shares-ref-data-store" "share-holders-with-ref-data")
 
-        us-share-holders
+        ^KTable us-share-holders
         (->
           (.table builder "share-holders-with-ref-data" "share-holders-store")
           (.filter (k/pred [key position]
@@ -167,12 +168,20 @@
                      (let [result (set/difference value1 value2)]
                        (when-not (empty? result)
                          result)))
-                   "us-share-holders"))]
-    [builder us-share-holders]))
+                   "us-share-holders"))
+
+        with-client-data
+        (->
+          (.join us-share-holders client-data
+                 (k/val-joiner [left right]
+                               (log/info "joining" left right)
+                               (:email right)))
+          (.through "final-result" "final-result-store"))]
+    [builder with-client-data]))
 
 (defn get-all-in-local-store [kafka-streams]
   (fn []
-    (with-open [all (.all (.store kafka-streams "us-share-holders" (QueryableStoreTypes/keyValueStore)))]
+    (with-open [all (.all (.store kafka-streams "final-result-store" (QueryableStoreTypes/keyValueStore)))]
       (doall
         (map (fn [x] {:key   (.key x)
                       :value (.value x)})

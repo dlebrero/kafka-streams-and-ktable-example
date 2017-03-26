@@ -37,6 +37,12 @@
                 :value {:name     name
                         :exchange exchange}}))
 
+(defn set-client-data [client email]
+  (produce-edn {:topic "client-data"
+                :key   client
+                :value {:client client
+                        :email  email}}))
+
 (defn update-share-holder [position-id client ticker amount]
   (if (zero? amount)
     (produce-edn {:topic "share-holders"
@@ -59,6 +65,10 @@
       (set-ref-data ticker name exchange)
       {:status 200
        :body   (pr-str "done!")})
+    (POST "/set-client-data" [client email]
+      (set-client-data client email)
+      {:status 200
+       :body   (pr-str "done!")})
     (GET "/local-state" []
       {:status 200
        :body   (pr-str (us-share-holders))})))
@@ -72,6 +82,8 @@
     (set-ref-data "VOD" "Vodafone Group PLC" "LON")
     (set-ref-data "BT.A" "BT Group" "LON"))
 
+  (set-client-data "daniel" "dlebrero@gmail.com")
+
   (update-share-holder "position1" "daniel" "VOD" 2)
   (update-share-holder "position2" "daniel" "AAPL" 2)
   (update-share-holder "position3" "daniel" "FB" 20)
@@ -79,6 +91,5 @@
 
   (update-share-holder "position3" "daniel" "FB" 0)
   (update-share-holder "position4" "daniel" "VOD" 20)
-
 
   )

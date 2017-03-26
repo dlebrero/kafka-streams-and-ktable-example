@@ -22,6 +22,11 @@ Once the environment has been started, you have to add some reference data first
 
      curl --data "ticker=AAPL&exchange=NASDAQ&name=Apple" -X POST http://localhost:3004/set-ref-data
 
+
+Then you have to add the client data, in this case just the email:
+
+     curl --data "client=client1&email=foo@bar.com" -X POST http://localhost:3004/set-client-data
+
 And then you can add new positions with:
 
      curl --data "position=position1&client=client1&amount=1&ticker=AAPL" -X POST http://localhost:3004/set-shares
