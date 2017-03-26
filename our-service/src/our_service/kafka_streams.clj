@@ -8,20 +8,25 @@
   (:gen-class)
   (:import (java.util Properties)
            (org.apache.kafka.streams StreamsConfig KafkaStreams KeyValue)
-           (org.apache.kafka.common.serialization Serde Serdes)
+           (org.apache.kafka.common.serialization Serde Serdes Serializer)
            (org.apache.kafka.clients.consumer ConsumerConfig)
            (org.apache.kafka.streams.kstream KStreamBuilder)
            (org.apache.kafka.streams.state QueryableStoreTypes)))
-
-
 
 
 ;;;
 ;;; Serialization stuff
 ;;;
 
+(deftype NotSerializeNil [edn-serializer]
+  Serializer
+  (configure [_ configs isKey] (.configure edn-serializer configs isKey))
+  (serialize [_ topic data]
+    (when data (.serialize edn-serializer topic data)))
+  (close [_] (.close edn-serializer)))
+
 ;; Can be global as they are thread-safe
-(def serializer (serializers/edn-serializer))
+(def serializer (NotSerializeNil. (serializers/edn-serializer)))
 (def deserializer (deserializers/edn-deserializer))
 
 (deftype EdnSerde []
