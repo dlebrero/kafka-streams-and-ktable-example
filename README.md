@@ -1,11 +1,11 @@
 # Kafka Streams and KTables examples
 
-This code is the companion of the blog post [Kafka Streams a POC]()
+This code is the companion of the blog post [Joins on stateful stream processing using Kafka Streams' KTables and GlobalKTables](http://danlebrero.com/2017/05/07/kafka-streams-ktable-globalktable-joining-reference-data/)
 
 This project uses Docker to create a cluster of 3 microservices that consume from a Kafka topic using the
 Kafka Streams API.
 
-The main processing function is [here](our-service/src/our_service/kafka_streams.clj#L55).
+The main processing function is [here](our-service/src/our_service/kafka_streams.clj#L146).
 
 ## Usage
 
