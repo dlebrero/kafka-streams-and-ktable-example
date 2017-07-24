@@ -15,15 +15,15 @@ Docker should be installed.
 
 To run:
 
-     docker-compose -p ktable-demo -f docker-compose.yml up
+    docker-compose -p ktable-demo -f docker-compose.yml up
      
 Once the environment has been started, you can add new positions with:
 
-     curl --data "client=client1&exchange=NASDAQ&amount=1&ticker=AAPL" -X POST http://localhost:3004/set-shares
+    curl --data "client=client1&exchange=NASDAQ&amount=1&ticker=AAPL" -X POST http://localhost:3004/set-shares
 
 To remove a position, just set the amount to 0:
 
-     curl --data "client=client1&exchange=NASDAQ&amount=0&ticker=AAPL" -X POST http://localhost:3004/set-shares
+    curl --data "client=client1&exchange=NASDAQ&amount=0&ticker=AAPL" -X POST http://localhost:3004/set-shares
      
 ## Clean up
 
@@ -31,6 +31,3 @@ To get rid of all:
 
     docker-compose -p ktable-demo -f docker-compose.yml down --rmi all --remove-orphans
     docker image rm pandeiro/lein:2.5.2 wurstmeister/kafka:0.10.1.0-1
-    
-    
-    
