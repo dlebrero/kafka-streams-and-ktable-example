@@ -15,18 +15,18 @@ Docker should be installed.
 
 To run:
 
-     cd our-service
-     docker build . -t danlebrero/ktable-demo
-     cd ..
-     docker-compose -p ktable-demo -f docker-compose.yml up
+    cd our-service
+    docker build . -t danlebrero/ktable-demo
+    cd ..
+    docker-compose -p ktable-demo -f docker-compose.yml up
      
 Once the environment has been started, you can add new positions with:
 
-     curl --data "client=client1&exchange=NASDAQ&amount=1&ticker=AAPL" -X POST http://localhost:3004/set-shares
+    curl --data "client=client1&exchange=NASDAQ&amount=1&ticker=AAPL" -X POST http://localhost:3004/set-shares
 
 To remove a position, just set the amount to 0:
 
-     curl --data "client=client1&exchange=NASDAQ&amount=0&ticker=AAPL" -X POST http://localhost:3004/set-shares
+    curl --data "client=client1&exchange=NASDAQ&amount=0&ticker=AAPL" -X POST http://localhost:3004/set-shares
      
 ## Clean up
 
