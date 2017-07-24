@@ -22,24 +22,24 @@
 
 
 (defn for-ever
-  [msg thunk]
+  [msg time thunk]
   (loop []
     (if-let [result (try
                       [(thunk)]
                       (catch Exception e
                         (log/info msg)
                         (log/debug e msg)
-                        (Thread/sleep 3000)))]
+                        (Thread/sleep time)))]
       (result 0)
       (recur))))
 
 (defn wait-for-kafka [host port]
-  (for-ever "waiting for kafka"
+  (for-ever "waiting for kafka" 3000
     #(with-open [_ (Socket. host (int port))]
       true)))
 
 (defn wait-for-topic [topic]
-  (for-ever "waiting for topics"
+  (for-ever "waiting for topics" 3000
     #(let [config {:servers                 ["zoo1:2181"]
                    :connection-timeout      30000
                    :operation-retry-timeout 10}]
