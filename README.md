@@ -34,6 +34,3 @@ To get rid of all:
 
     docker-compose -p ktable-demo -f docker-compose.yml down --rmi all --remove-orphans
     docker image rm pandeiro/lein:2.5.2 wurstmeister/kafka:0.10.1.0-1
-    
-    
-    
