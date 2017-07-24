@@ -1,22 +1,12 @@
 (ns our-service.fake-producer
   (:require
+    [our-service.util :as util]
     [franzy.serialization.serializers :as serializers]
     [franzy.clients.producer.client :as client]
     [franzy.clients.producer.protocols :as producer]
     [compojure.core :refer [routes ANY GET POST]]
     [clojure.tools.logging :as log])
   (:use ring.middleware.params))
-
-(defn for-ever
-  [thunk]
-  (loop []
-    (if-let [result (try
-                      [(thunk)]
-                      (catch Exception e
-                        (println e)
-                        (Thread/sleep 100)))]
-      (result 0)
-      (recur))))
 
 (def kafka-client (delay
                     (client/make-producer {:bootstrap.servers "kafka1:9092"
@@ -28,7 +18,7 @@
 
 (defn produce-edn [m]
   (log/info "Producing" m)
-  (for-ever
+  (util/for-ever "waiting for sending" 100
     #(producer/send-sync! @kafka-client m)))
 
 (defn update-share-holder [client ticker exchange amount]
