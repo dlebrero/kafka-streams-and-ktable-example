@@ -13,20 +13,20 @@ services:
       KAFKA_CREATE_TOPICS: "share-holders:4:1:compact"
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
  our-service1:
-   image: danlebrero/ktable-demo
+   build: our-service
    ports:
     - 3003:3002
     - 3004:80
    volumes:
     - ./our-service/src/:/app/src/
  our-service2:
-   image: danlebrero/ktable-demo
+   build: our-service
    ports:
     - 3005:80
    volumes:
     - ./our-service/src/:/app/src/
  our-service3:
-   image: danlebrero/ktable-demo
+   build: our-service
    ports:
     - 3007:80
    volumes:
